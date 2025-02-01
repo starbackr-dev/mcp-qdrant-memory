@@ -1,122 +1,83 @@
-# MCP Memory Server with Qdrant Persistence
+# MCP Qdrant Memory Server
 
-This MCP server provides a knowledge graph implementation with semantic search capabilities powered by Qdrant vector database.
+An MCP server that enables named memory graphs to be persisted to a Qdrant instance, with support for both OpenAI and local LMStudio embeddings.
 
 ## Features
 
-- Graph-based knowledge representation with entities and relations
-- File-based persistence (memory.json)
-- Semantic search using Qdrant vector database
-- OpenAI embeddings for semantic similarity
-- HTTPS support with reverse proxy compatibility
+- Store and manage entities and relations in a knowledge graph
+- Persist data using Qdrant vector database
+- Semantic search across entities and relations
+- Support for multiple embedding providers:
+  - OpenAI's text-embedding-ada-002
+  - Local embeddings via LMStudio
 
-## Environment Variables
-
-The following environment variables are required:
+## Installation
 
 ```bash
-# OpenAI API key for generating embeddings
-OPENAI_API_KEY=your-openai-api-key
-
-# Qdrant server URL (supports both HTTP and HTTPS)
-QDRANT_URL=https://your-qdrant-server
-
-# Qdrant API key (if authentication is enabled)
-QDRANT_API_KEY=your-qdrant-api-key
-
-# Name of the Qdrant collection to use
-QDRANT_COLLECTION_NAME=your-collection-name
+npm install @delorenj/mcp-qdrant-memory
 ```
 
-## Setup
+## Configuration
 
-1. Install dependencies:
+The server requires the following environment variables:
+
+### Required
+- `QDRANT_URL`: URL of your Qdrant instance (e.g., "http://localhost:6333")
+- `QDRANT_COLLECTION_NAME`: Name of the collection to use in Qdrant
+
+### Optional
+- `QDRANT_API_KEY`: API key for Qdrant (if authentication is enabled)
+- `EMBEDDING_PROVIDER`: Choose the embedding provider ('openai' or 'lmstudio', defaults to 'openai')
+
+### Provider-Specific Configuration
+
+#### OpenAI (Default)
+Required when using OpenAI embeddings (`EMBEDDING_PROVIDER=openai`):
+- `OPENAI_API_KEY`: Your OpenAI API key
+
+#### LMStudio
+Optional when using LMStudio embeddings (`EMBEDDING_PROVIDER=lmstudio`):
+- `LMSTUDIO_URL`: URL of your LMStudio instance (defaults to "http://localhost:1234/v1")
+- `LMSTUDIO_DIMENSION`: Dimension of the embeddings from your LMStudio model (defaults to 768)
+
+## Setup with LMStudio
+
+1. Download and install LMStudio from [https://lmstudio.ai/](https://lmstudio.ai/)
+
+2. In LMStudio:
+   - Select or download an embedding model (e.g., BAAI/bge-small-en)
+   - Start the local server with the selected model
+   - Note the server URL (default: http://localhost:1234)
+
+3. Configure the MCP server:
+   ```bash
+   export EMBEDDING_PROVIDER=lmstudio
+   export LMSTUDIO_URL=http://localhost:1234/v1  # Or your custom URL
+   export LMSTUDIO_DIMENSION=768  # Match your model's dimension
+   export QDRANT_URL=http://localhost:6333
+   export QDRANT_COLLECTION_NAME=your_collection
+   ```
+
+## Usage
+
+### Starting the Server
+
 ```bash
-npm install
+npx mcp-server-memory
 ```
 
-2. Build the server:
-```bash
-npm run build
-```
+### MCP Tools
 
-3. Add to MCP settings:
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "/bin/zsh",
-      "args": ["-c", "cd /path/to/server && node dist/index.js"],
-      "env": {
-        "OPENAI_API_KEY": "your-openai-api-key",
-        "QDRANT_API_KEY": "your-qdrant-api-key",
-        "QDRANT_URL": "http://your-qdrant-server:6333",
-        "QDRANT_COLLECTION_NAME": "your-collection-name"
-      },
-      "alwaysAllow": [
-        "create_entities",
-        "create_relations",
-        "add_observations",
-        "delete_entities",
-        "delete_observations",
-        "delete_relations",
-        "read_graph",
-        "search_similar"
-      ]
-    }
-  }
-}
-```
+The server provides the following tools:
 
-## Tools
-
-### Entity Management
-- `create_entities`: Create multiple new entities
-- `create_relations`: Create relations between entities
-- `add_observations`: Add observations to entities
-- `delete_entities`: Delete entities and their relations
-- `delete_observations`: Delete specific observations
-- `delete_relations`: Delete specific relations
-- `read_graph`: Get the full knowledge graph
-
-### Semantic Search
-- `search_similar`: Search for semantically similar entities and relations
-  ```typescript
-  interface SearchParams {
-    query: string;     // Search query text
-    limit?: number;    // Max results (default: 10)
-  }
-  ```
-
-## Implementation Details
-
-The server maintains two forms of persistence:
-
-1. File-based (memory.json):
-   - Complete knowledge graph structure
-   - Fast access to full graph
-   - Used for graph operations
-
-2. Qdrant Vector DB:
-   - Semantic embeddings of entities and relations
-   - Enables similarity search
-   - Automatically synchronized with file storage
-
-### Synchronization
-
-When entities or relations are modified:
-1. Changes are written to memory.json
-2. Embeddings are generated using OpenAI
-3. Vectors are stored in Qdrant
-4. Both storage systems remain consistent
-
-### Search Process
-
-When searching:
-1. Query text is converted to embedding
-2. Qdrant performs similarity search
-3. Results include both entities and relations
-4. Results are ranked by semantic similarity
+1. `create_entities`: Create multiple new entities in the knowledge graph
+2. `create_relations`: Create multiple new relations between entities
+3. `add_observations`: Add new observations to existing entities
+4. `delete_entities`: Delete multiple entities and their relations
+5. `delete_observations`: Delete specific observations from entities
+6. `delete_relations`: Delete multiple relations
+7. `read_graph`: Read the entire knowledge graph
+8. `search_similar`: Search for similar entities and relations using semantic search
 
 ## Example Usage
 
@@ -124,124 +85,50 @@ When searching:
 // Create entities
 await client.callTool("create_entities", {
   entities: [{
-    name: "Project",
-    entityType: "Task",
-    observations: ["A new development project"]
+    name: "John",
+    entityType: "person",
+    observations: ["Likes coffee", "Works as developer"]
   }]
 });
 
-// Search similar concepts
+// Create relations
+await client.callTool("create_relations", {
+  relations: [{
+    from: "John",
+    to: "Coffee",
+    relationType: "likes"
+  }]
+});
+
+// Search similar
 const results = await client.callTool("search_similar", {
-  query: "development tasks",
+  query: "Who likes beverages?",
   limit: 5
 });
 ```
 
-## HTTPS and Reverse Proxy Configuration
+## Migration Between Embedding Providers
 
-The server supports connecting to Qdrant through HTTPS and reverse proxies. This is particularly useful when:
-- Running Qdrant behind a reverse proxy like Nginx or Apache
-- Using self-signed certificates
-- Requiring custom SSL/TLS configurations
+When switching embedding providers, you'll need to recreate your vectors due to different embedding dimensions:
 
-### Setting up with a Reverse Proxy
+1. Back up your data using `read_graph`
+2. Delete the existing Qdrant collection
+3. Update your environment variables for the new provider
+4. Restart the MCP server (it will create a new collection with the correct dimensions)
+5. Restore your data using `create_entities` and `create_relations`
 
-1. Configure your reverse proxy (example using Nginx):
-```nginx
-server {
-    listen 443 ssl;
-    server_name qdrant.yourdomain.com;
+## Development
 
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    location / {
-        proxy_pass http://localhost:6333;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-2. Update your environment variables:
 ```bash
-QDRANT_URL=https://qdrant.yourdomain.com
-```
-
-### Security Considerations
-
-The server implements robust HTTPS handling with:
-- Custom SSL/TLS configuration
-- Proper certificate verification options
-- Connection pooling and keepalive
-- Automatic retry with exponential backoff
-- Configurable timeouts
-
-### Troubleshooting HTTPS Connections
-
-If you experience connection issues:
-
-1. Verify your certificates:
-```bash
-openssl s_client -connect qdrant.yourdomain.com:443
-```
-
-2. Test direct connectivity:
-```bash
-curl -v https://qdrant.yourdomain.com/collections
-```
-
-3. Check for any proxy settings:
-```bash
-env | grep -i proxy
-```
-
-## Setup
-
-1. Install dependencies:
-```bash
+# Install dependencies
 npm install
-```
 
-2. Build the server:
-```bash
+# Build
 npm run build
+
+# Run locally
+npm start
 ```
-
-3. Add to MCP settings:
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "/bin/zsh",
-      "args": ["-c", "cd /path/to/server && node dist/index.js"],
-      "env": {
-        "OPENAI_API_KEY": "your-openai-api-key",
-        "QDRANT_URL": "https://your-qdrant-server",
-        "QDRANT_API_KEY": "your-qdrant-api-key",
-        "QDRANT_COLLECTION_NAME": "your-collection-name"
-      },
-      "alwaysAllow": [
-        "create_entities",
-        "create_relations",
-        "add_observations",
-        "delete_entities",
-        "delete_observations",
-        "delete_relations",
-        "read_graph",
-        "search_similar"
-      ]
-    }
-  }
-}
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
 
 ## License
 
