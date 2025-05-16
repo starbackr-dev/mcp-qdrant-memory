@@ -1,7 +1,10 @@
 // Check for required environment variables
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-if (!OPENAI_API_KEY) {
-  console.error("Error: OPENAI_API_KEY environment variable is required");
+import dotenv from 'dotenv';
+dotenv.config();
+
+const OLLAMA_API_URL = process.env.OLLAMA_API_URL || 'http://localhost:11434';
+if (!OLLAMA_API_URL) {
+  console.error("Error: OLLAMA_API_URL environment variable is required");
   process.exit(1);
 }
 
@@ -20,4 +23,4 @@ if (!COLLECTION_NAME) {
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY;
 // Note: QDRANT_API_KEY is optional, so we don't check if it exists
 
-export { OPENAI_API_KEY, QDRANT_URL, COLLECTION_NAME, QDRANT_API_KEY };
+export { OLLAMA_API_URL, QDRANT_URL, COLLECTION_NAME, QDRANT_API_KEY };

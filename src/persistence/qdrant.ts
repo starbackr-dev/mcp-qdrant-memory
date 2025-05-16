@@ -1,10 +1,10 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
-import OpenAI from "openai";
 import crypto from "crypto";
+import fetch from "node-fetch";
 import {
   QDRANT_URL,
   COLLECTION_NAME,
-  OPENAI_API_KEY,
+  OLLAMA_API_URL,
   QDRANT_API_KEY
 } from "../config.js";
 import { Entity, Relation } from "../types.js";
@@ -74,7 +74,6 @@ function isRelation(payload: Payload): payload is RelationPayload {
 
 export class QdrantPersistence {
   private client: CustomQdrantClient;
-  private openai: OpenAI;
   private initialized: boolean = false;
 
   constructor() {
@@ -91,10 +90,6 @@ export class QdrantPersistence {
     }
 
     this.client = new CustomQdrantClient(QDRANT_URL);
-
-    this.openai = new OpenAI({
-      apiKey: OPENAI_API_KEY,
-    });
   }
 
   async connect() {
@@ -134,7 +129,7 @@ export class QdrantPersistence {
       throw new Error("COLLECTION_NAME environment variable is required");
     }
 
-    const requiredVectorSize = 1536; // OpenAI embedding dimension
+    const requiredVectorSize = 768; // nomic-embed-text:v1.5 embedding dimension
 
     try {
       // Check if collection exists
@@ -197,16 +192,29 @@ export class QdrantPersistence {
 
   private async generateEmbedding(text: string) {
     try {
-      const response = await this.openai.embeddings.create({
-        model: "text-embedding-ada-002",
-        input: text,
+      const response = await fetch(`${OLLAMA_API_URL}/api/embeddings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: "nomic-embed-text:v1.5",
+          prompt: text,
+        }),
       });
-      return response.data[0].embedding;
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Ollama API error: ${response.status} ${errorText}`);
+      }
+
+      const data:any = await response.json();
+      return data.embedding;
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unknown OpenAI error";
-      console.error("OpenAI embedding error:", message);
-      throw new Error(`Failed to generate embeddings with OpenAI: ${message}`);
+        error instanceof Error ? error.message : "Unknown Ollama error";
+      console.error("Ollama embedding error:", message);
+      throw new Error(`Failed to generate embeddings with Ollama: ${message}`);
     }
   }
 
